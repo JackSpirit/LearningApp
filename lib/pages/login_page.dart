@@ -1,7 +1,6 @@
-import 'package:learning_app/auth/auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:learning_app/auth/auth_service.dart';
 import 'package:learning_app/pages/register_page.dart';
-
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,33 +10,23 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // get auth service
   final authService = AuthService();
-
-  // text controllers
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-
-  // login button pressed
   void login() async {
-    // prepare data
-    final email = _emailController.text;
-    final password = _passwordController.text;
-    // attempt login..
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
     try {
       await authService.signInWithEmailPassword(email, password);
-    }
-
-// catch any errors..
-    catch (e) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text("Error: $e")));
       }
     }
-
   }
+
   void signUp() {
     Navigator.push(
       context,
@@ -45,44 +34,79 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-
-
-  // BUILD UI
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: ListView(
-        padding: EdgeInsets.symmetric(horizontal: 12 ,vertical: 50),
-        children: [
-          // email
-          TextField(
-            controller: _emailController,
-            decoration: const InputDecoration(labelText:"Email"),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Minimalist Email Field
+              TextField(
+                controller: _emailController,
+                decoration: const InputDecoration(
+                  hintText: "Email",
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 16),
+                ),
+                style: const TextStyle(fontSize: 16),
+              ),
+              const Divider(height: 1, thickness: 1),
+
+              // Minimalist Password Field
+              TextField(
+                controller: _passwordController,
+                decoration: const InputDecoration(
+                  hintText: "Password",
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 16),
+                ),
+                obscureText: true,
+                style: const TextStyle(fontSize: 16),
+              ),
+              const Divider(height: 1, thickness: 1),
+
+              const SizedBox(height: 24),
+
+              // Minimalist Login Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: login,
+                  style: ElevatedButton.styleFrom(
+                    elevation: 0,
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text("Login", style: TextStyle(fontSize: 16)),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Minimalist Sign Up Text
+              GestureDetector(
+                onTap: signUp,
+                child: Text(
+                  "Don't have an account? Sign Up",
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
           ),
-
-          // password
-          TextField(
-            controller: _passwordController,
-            decoration: const InputDecoration(labelText:"Password"),
-          ),
-
-
-
-          const SizedBox(height: 12),
-          // button
-          ElevatedButton(
-            onPressed: login,
-            child: const Text("Login"),
-          ),
-          GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context)=> const RegisterPage())),
-              child: const Center(child:Text("Don't have an account?Sign Up") )),// ElevatedButton
-
-        ],
+        ),
       ),
     );
   }
-
-
-
 }
+
