@@ -10,7 +10,7 @@ final profileProvider = StateNotifierProvider<ProfileNotifier, AsyncValue<Profil
 );
 
 class ProfileNotifier extends StateNotifier<AsyncValue<Profile?>> {
-  final Ref ref;  // <--- FIXED HERE
+  final Ref ref;
 
   ProfileNotifier(this.ref) : super(const AsyncValue.loading()) {
     loadProfile();
@@ -23,7 +23,7 @@ class ProfileNotifier extends StateNotifier<AsyncValue<Profile?>> {
         state = const AsyncValue.data(null);
         return;
       }
-      final profile = await ref.read(profileServiceProvider).fetchProfile(userId); // <--- FIXED HERE
+      final profile = await ref.read(profileServiceProvider).fetchProfile(userId);
       state = AsyncValue.data(profile);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -33,7 +33,7 @@ class ProfileNotifier extends StateNotifier<AsyncValue<Profile?>> {
   Future<void> updateProfile(Profile profile) async {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
-      await ref.read(profileServiceProvider).updateProfile(userId!, profile); // <--- FIXED HERE
+      await ref.read(profileServiceProvider).updateProfile(userId!, profile);
       state = AsyncValue.data(profile);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -43,7 +43,7 @@ class ProfileNotifier extends StateNotifier<AsyncValue<Profile?>> {
   Future<void> updateAvatar(String filePath) async {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
-      final url = await ref.read(profileServiceProvider).uploadAvatar(userId!, filePath); // <--- FIXED HERE
+      final url = await ref.read(profileServiceProvider).uploadAvatar(userId!, filePath);
       final current = state.value;
       if (current != null) {
         final updated = Profile(

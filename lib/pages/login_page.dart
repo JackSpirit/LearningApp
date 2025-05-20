@@ -1,6 +1,8 @@
+
 import 'package:flutter/material.dart';
 import 'package:learning_app/auth/auth_service.dart';
 import 'package:learning_app/pages/register_page.dart';
+import 'package:learning_app/pages/home_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -19,6 +21,11 @@ class _LoginPageState extends State<LoginPage> {
     final password = _passwordController.text.trim();
     try {
       await authService.signInWithEmailPassword(email, password);
+      // After successful authentication
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => HomePage()),
+      );
+
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -43,7 +50,7 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Minimalist Email Field
+
               TextField(
                 controller: _emailController,
                 decoration: const InputDecoration(
@@ -55,7 +62,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const Divider(height: 1, thickness: 1),
 
-              // Minimalist Password Field
+
               TextField(
                 controller: _passwordController,
                 decoration: const InputDecoration(
@@ -70,7 +77,7 @@ class _LoginPageState extends State<LoginPage> {
 
               const SizedBox(height: 24),
 
-              // Minimalist Login Button
+
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -90,7 +97,7 @@ class _LoginPageState extends State<LoginPage> {
 
               const SizedBox(height: 16),
 
-              // Minimalist Sign Up Text
+
               GestureDetector(
                 onTap: signUp,
                 child: Text(
@@ -109,4 +116,3 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 }
-

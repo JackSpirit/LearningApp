@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../auth/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:learning_app/pages/home_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -66,7 +67,10 @@ class _RegisterPageState extends State<RegisterPage> {
       });
 
       if (!mounted) return;
-      Navigator.pop(context);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomePage()),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)

@@ -4,8 +4,9 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../provider/profile_provider.dart';
 import '../model/profile.dart';
-import 'login_page.dart'; // Make sure this import points to your LoginPage
-import '../auth/auth_service.dart'; // Make sure this import points to your AuthService
+import 'login_page.dart';
+import '../auth/auth_service.dart';
+import 'package:learning_app/pages/home_page.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -19,7 +20,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   late TextEditingController _bioController;
   File? _imageFile;
 
-  final authService = AuthService(); // Uses your Supabase AuthService
+  final authService = AuthService();
 
   @override
   void initState() {
@@ -61,7 +62,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   }
 
   Future<void> _signOut() async {
-    await authService.signOut(); // Uses your Supabase signOut method
+    await authService.signOut();
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -74,7 +75,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(profileProvider);
 
-    // Minimalist black and white palette
     const Color background = Colors.white;
     const Color textColor = Colors.black;
     const Color secondaryText = Color(0xFF888888);
@@ -83,18 +83,16 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(
-        backgroundColor: background,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          "Profile",
-          style: TextStyle(
-            color: textColor,
-            fontWeight: FontWeight.w600,
-            fontSize: 22,
-            letterSpacing: 1.2,
-          ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: textColor),
+          onPressed: () {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => HomePage()),
+            );
+          },
         ),
+        title: Text('Profile'),
+        backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: textColor),
         actions: [
           IconButton(
@@ -239,6 +237,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     );
   }
 }
+
 
 
 
