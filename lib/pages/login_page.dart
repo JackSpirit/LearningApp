@@ -21,7 +21,6 @@ class _LoginPageState extends State<LoginPage> {
     final password = _passwordController.text.trim();
     try {
       await authService.signInWithEmailPassword(email, password);
-      // After successful authentication
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => HomePage()),
       );

@@ -10,8 +10,8 @@ class ProfileService {
         .from('profiles')
         .select()
         .eq('id', userId)
-        .maybeSingle(); // <-- FIXED
-    if (data == null) return null; // <-- FIXED
+        .maybeSingle();
+    if (data == null) return null;
     return Profile.fromMap(data);
   }
 

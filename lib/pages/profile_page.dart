@@ -7,6 +7,35 @@ import '../model/profile.dart';
 import 'login_page.dart';
 import '../auth/auth_service.dart';
 import 'package:learning_app/pages/home_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+final followerCountProvider = FutureProvider<int>((ref) async {
+  final supabase = Supabase.instance.client;
+  final currentUserId = supabase.auth.currentUser?.id;
+
+  if (currentUserId == null) return 0;
+
+  final count = await supabase
+      .from('followers')
+      .count()
+      .eq('following_id', currentUserId);
+
+  return count;
+});
+
+final followingCountProvider = FutureProvider<int>((ref) async {
+  final supabase = Supabase.instance.client;
+  final currentUserId = supabase.auth.currentUser?.id;
+
+  if (currentUserId == null) return 0;
+
+  final count = await supabase
+      .from('followers')
+      .count()
+      .eq('follower_id', currentUserId);
+
+  return count;
+});
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -71,9 +100,47 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     }
   }
 
+  Widget _buildStatContainer({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 22, color: Colors.black),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF555555),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(profileProvider);
+    final followerCountAsync = ref.watch(followerCountProvider);
+    final followingCountAsync = ref.watch(followingCountProvider);
 
     const Color background = Colors.white;
     const Color textColor = Colors.black;
@@ -105,7 +172,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       body: profileAsync.when(
         data: (profile) {
           if (profile == null) return const Center(child: Text('No profile found.'));
-
           _nameController.text = profile.name;
           _bioController.text = profile.bio;
 
@@ -138,6 +204,64 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       textStyle: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                     child: const Text("Change Photo"),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: followerCountAsync.when(
+                          data: (count) => _buildStatContainer(
+                            icon: Icons.people_outline,
+                            label: "Followers",
+                            value: count.toString(),
+                          ),
+                          loading: () => _buildStatContainer(
+                            icon: Icons.people_outline,
+                            label: "Followers",
+                            value: "...",
+                          ),
+                          error: (_, __) => _buildStatContainer(
+                            icon: Icons.people_outline,
+                            label: "Followers",
+                            value: "0",
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      Expanded(
+                        child: _buildStatContainer(
+                          icon: Icons.star_outline,
+                          label: "Points",
+                          value: profile.points.toString(),
+                        ),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      Expanded(
+                        child: followingCountAsync.when(
+                          data: (count) => _buildStatContainer(
+                            icon: Icons.person_add_outlined,
+                            label: "Following",
+                            value: count.toString(),
+                          ),
+                          loading: () => _buildStatContainer(
+                            icon: Icons.person_add_outlined,
+                            label: "Following",
+                            value: "...",
+                          ),
+                          error: (_, __) => _buildStatContainer(
+                            icon: Icons.person_add_outlined,
+                            label: "Following",
+                            value: "0",
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 28),
                   TextField(
@@ -174,40 +298,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       contentPadding: EdgeInsets.symmetric(vertical: 6),
                     ),
                   ),
-                  const SizedBox(height: 28),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 0),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.star, color: textColor, size: 28),
-                        const SizedBox(width: 12),
-                        const Text(
-                          "Points",
-                          style: TextStyle(
-                            color: secondaryText,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${profile.points}',
-                          style: const TextStyle(
-                            color: textColor,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.1,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                    ),
-                  ),
                   const SizedBox(height: 36),
                   SizedBox(
                     width: double.infinity,
@@ -237,6 +327,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     );
   }
 }
+
+
 
 
 

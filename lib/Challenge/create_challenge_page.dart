@@ -1,4 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class Task {
+  String name;
+  int points;
+
+  Task({required this.name, required this.points});
+}
 
 class CreateChallengePage extends StatefulWidget {
   @override
@@ -7,8 +15,10 @@ class CreateChallengePage extends StatefulWidget {
 
 class _CreateChallengePageState extends State<CreateChallengePage> {
   final _formKey = GlobalKey<FormState>();
+  final _supabase = Supabase.instance.client;
   String challengeName = '';
   List<Task> tasks = [];
+  bool _isLoading = false;
 
   void _addTask() {
     setState(() {
@@ -22,19 +32,59 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
     });
   }
 
-  void _saveChallenge() {
+  Future<void> _saveChallenge() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      print('Challenge: $challengeName');
-      for (var task in tasks) {
-        print('Task: ${task.name}, Points: ${task.points}');
+
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        final userId = _supabase.auth.currentUser?.id;
+
+        final response = await _supabase
+            .from('challenges')
+            .insert({
+          'name': challengeName,
+          'user_id': userId,
+          'created_at': DateTime.now().toIso8601String(),
+        })
+            .select()
+            .single();
+
+        final challengeId = response['id'];
+
+        final tasksToInsert = tasks.map((task) => {
+          'name': task.name,
+          'points': task.points,
+          'challenge_id': challengeId,
+          'user_id': userId,
+        }).toList();
+
+        await _supabase
+            .from('tasks')
+            .insert(tasksToInsert);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Challenge saved successfully!'),
+            backgroundColor: Colors.black,
+          ),
+        );
+
+      } catch (error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving challenge: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Challenge saved!'),
-          backgroundColor: Colors.black,
-        ),
-      );
     }
   }
 
@@ -198,7 +248,7 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _saveChallenge,
+                  onPressed: _isLoading ? null : _saveChallenge,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black,
                     foregroundColor: Colors.white,
@@ -207,7 +257,9 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: Text(
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
                     'SAVE CHALLENGE',
                     style: TextStyle(
                       letterSpacing: 1.2,
@@ -224,10 +276,5 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
   }
 }
 
-class Task {
-  String name;
-  int points;
 
-  Task({required this.name, required this.points});
-}
 
