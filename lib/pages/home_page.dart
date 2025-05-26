@@ -4,6 +4,7 @@ import 'package:learning_app/Challenge/create_challenge_page.dart';
 import 'package:learning_app/Profile/search_profile_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:learning_app/Challenge/challenge_enter_detail_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -15,6 +16,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   List<Map<String, String>> enteredChallenges = [];
   bool isLoading = true;
+  final _supabase = Supabase.instance.client;
 
   @override
   void initState() {
@@ -28,18 +30,36 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
+      await deleteExpiredChallenges();
+
       final prefs = await SharedPreferences.getInstance();
       final challengeIds = prefs.getStringList('enteredChallenges') ?? [];
 
       final challenges = <Map<String, String>>[];
+      final validChallengeIds = <String>[];
 
       for (final id in challengeIds) {
-        final name = prefs.getString('challenge_name_$id') ?? 'Challenge $id';
-        challenges.add({
-          'id': id,
-          'name': name,
-        });
+        final challengeData = await fetchChallengeFromBackend(id);
+
+        if (challengeData != null) {
+          final endTime = DateTime.parse(challengeData['end_time']);
+          if (endTime.isAfter(DateTime.now())) {
+            challenges.add({
+              'id': id,
+              'name': challengeData['name'] ?? 'Challenge $id',
+            });
+            validChallengeIds.add(id);
+
+            await prefs.setString('challenge_name_$id', challengeData['name'] ?? '');
+          } else {
+             await removeLocalChallengeData(id);
+          }
+        } else {
+          await removeLocalChallengeData(id);
+        }
       }
+
+      await prefs.setStringList('enteredChallenges', validChallengeIds);
 
       setState(() {
         enteredChallenges = challenges;
@@ -51,6 +71,79 @@ class _HomePageState extends State<HomePage> {
         isLoading = false;
       });
     }
+  }
+
+  Future<void> deleteExpiredChallenges() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final expiredChallenges = await _supabase
+          .from('challenges')
+          .select('id')
+          .eq('user_id', userId)
+          .lt('end_time', DateTime.now().toIso8601String());
+
+      for (final challenge in expiredChallenges) {
+        final challengeId = challenge['id'];
+
+        await _supabase
+            .from('tasks')
+            .delete()
+            .eq('challenge_id', challengeId);
+
+        await _supabase
+            .from('challenges')
+            .delete()
+            .eq('id', challengeId);
+
+        print('Deleted expired challenge: $challengeId');
+      }
+    } catch (e) {
+      print('Error deleting expired challenges: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> fetchChallengeFromBackend(String challengeId) async {
+    try {
+      final response = await _supabase
+          .from('challenges')
+          .select('id, name, end_time')
+          .eq('id', challengeId)
+          .maybeSingle();
+
+      return response;
+    } catch (e) {
+      print('Error fetching challenge: $e');
+      return null;
+    }
+  }
+
+  Future<bool> checkChallengeExistsInBackend(String challengeId) async {
+    try {
+      final response = await _supabase
+          .from('challenges')
+          .select('id')
+          .eq('id', challengeId)
+          .maybeSingle();
+
+      return response != null;
+    } catch (e) {
+      print('Error checking challenge existence: $e');
+      return false;
+    }
+  }
+
+  Future<void> removeLocalChallengeData(String challengeId) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.remove('challenge_name_$challengeId');
+    await prefs.remove('challenge_description_$challengeId');
+    await prefs.remove('challenge_duration_$challengeId');
+    await prefs.remove('challenge_start_date_$challengeId');
+    await prefs.remove('challenge_progress_$challengeId');
+
+    print('Removed local data for deleted/expired challenge: $challengeId');
   }
 
   @override
@@ -160,7 +253,7 @@ class _HomePageState extends State<HomePage> {
                             ),
                           ),
                         ).then((_) {
-                         loadEnteredChallenges();
+                          loadEnteredChallenges();
                         });
                       },
                       child: Container(
@@ -279,4 +372,5 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
 

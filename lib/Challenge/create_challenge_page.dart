@@ -19,6 +19,7 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
   String challengeName = '';
   List<Task> tasks = [];
   bool _isLoading = false;
+  DateTime? endTime;
 
   void _addTask() {
     setState(() {
@@ -34,6 +35,16 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
 
   Future<void> _saveChallenge() async {
     if (_formKey.currentState!.validate()) {
+      if (endTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please select an end time'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
       _formKey.currentState!.save();
 
       setState(() {
@@ -49,6 +60,7 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
           'name': challengeName,
           'user_id': userId,
           'created_at': DateTime.now().toIso8601String(),
+          'end_time': endTime!.toIso8601String(),
         })
             .select()
             .single();
@@ -62,9 +74,7 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
           'user_id': userId,
         }).toList();
 
-        await _supabase
-            .from('tasks')
-            .insert(tasksToInsert);
+        await _supabase.from('tasks').insert(tasksToInsert);
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -72,7 +82,6 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
             backgroundColor: Colors.black,
           ),
         );
-
       } catch (error) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -93,7 +102,8 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text('Create Challenge',
+        title: Text(
+          'Create Challenge',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
         ),
         backgroundColor: Colors.white,
@@ -128,17 +138,81 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
                   challengeName = value!;
                 },
               ),
+
+              SizedBox(height: 24),
+              Text(
+                'End Time',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              SizedBox(height: 8),
+              InkWell(
+                onTap: () async {
+                  final pickedDate = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2100),
+                  );
+
+                  if (pickedDate != null) {
+                    final pickedTime = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.now(),
+                    );
+
+                    if (pickedTime != null) {
+                      setState(() {
+                        endTime = DateTime(
+                          pickedDate.year,
+                          pickedDate.month,
+                          pickedDate.day,
+                          pickedTime.hour,
+                          pickedTime.minute,
+                        );
+                      });
+                    }
+                  }
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black26),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        endTime == null
+                            ? 'Select end time'
+                            : '${endTime!.toLocal()}'.split('.')[0],
+                        style: TextStyle(
+                          color:
+                          endTime == null ? Colors.black54 : Colors.black,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Icon(Icons.calendar_today, color: Colors.black54, size: 18),
+                    ],
+                  ),
+                ),
+              ),
+
               SizedBox(height: 32),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                      'TASKS',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
-                      )
+                    'TASKS',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
                   ),
                   IconButton(
                     icon: Icon(Icons.add, color: Colors.black),
@@ -163,16 +237,18 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('TASK ${index + 1}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1,
-                                color: Colors.black54,
-                              )
+                          Text(
+                            'TASK ${index + 1}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                              color: Colors.black54,
+                            ),
                           ),
                           IconButton(
-                            icon: Icon(Icons.close, size: 18, color: Colors.black54),
+                            icon: Icon(Icons.close,
+                                size: 18, color: Colors.black54),
                             padding: EdgeInsets.zero,
                             constraints: BoxConstraints(),
                             onPressed: () => _removeTask(index),
@@ -185,7 +261,8 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
                           labelText: 'Task Name',
                           labelStyle: TextStyle(color: Colors.black54),
                           focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Colors.black, width: 2),
+                            borderSide:
+                            BorderSide(color: Colors.black, width: 2),
                           ),
                           enabledBorder: UnderlineInputBorder(
                             borderSide: BorderSide(color: Colors.black26),
@@ -209,7 +286,8 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
                           labelText: 'Points',
                           labelStyle: TextStyle(color: Colors.black54),
                           focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Colors.black, width: 2),
+                            borderSide:
+                            BorderSide(color: Colors.black, width: 2),
                           ),
                           enabledBorder: UnderlineInputBorder(
                             borderSide: BorderSide(color: Colors.black26),
@@ -275,6 +353,7 @@ class _CreateChallengePageState extends State<CreateChallengePage> {
     );
   }
 }
+
 
 
 

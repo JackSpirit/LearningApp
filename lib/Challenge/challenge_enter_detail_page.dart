@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 
 Future<void> saveEnteredChallenge(String challengeId, String challengeName) async {
   final prefs = await SharedPreferences.getInstance();
@@ -122,6 +123,18 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
     ref.read(completedTasksProvider.notifier).state = tasks;
   }
 
+  String formatEndTime(String? endTime) {
+    if (endTime == null) return 'No end time specified';
+
+    try {
+      final DateTime dateTime = DateTime.parse(endTime);
+      final DateFormat formatter = DateFormat('MMM dd, yyyy • hh:mm a');
+      return formatter.format(dateTime);
+    } catch (e) {
+      return 'Invalid date format';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final challengeAsync = ref.watch(challengeDetailProvider(widget.challengeId));
@@ -161,8 +174,7 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
 
           final tasks = challenge['tasks'] as List;
           final challengeName = challenge['name'] ?? 'UNTITLED';
-
-          saveEnteredChallenge(widget.challengeId, challengeName);
+          final endTime = challenge['end_time'];
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -193,6 +205,33 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                           fontSize: 14,
                           color: Colors.black87,
                           height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          border: Border.all(color: Colors.black12, width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.schedule,
+                              size: 16,
+                              color: Colors.black54,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'ENDS: ${formatEndTime(endTime)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black54,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -357,4 +396,5 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
     );
   }
 }
+
 
