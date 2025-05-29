@@ -12,33 +12,27 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 final followerCountProvider = FutureProvider<int>((ref) async {
   final supabase = Supabase.instance.client;
   final currentUserId = supabase.auth.currentUser?.id;
-
   if (currentUserId == null) return 0;
-
   final count = await supabase
       .from('followers')
       .count()
       .eq('following_id', currentUserId);
-
   return count;
 });
 
 final followingCountProvider = FutureProvider<int>((ref) async {
   final supabase = Supabase.instance.client;
   final currentUserId = supabase.auth.currentUser?.id;
-
   if (currentUserId == null) return 0;
-
   final count = await supabase
       .from('followers')
       .count()
       .eq('follower_id', currentUserId);
-
   return count;
 });
 
 class ProfilePage extends ConsumerStatefulWidget {
-  const ProfilePage({super.key});
+  const ProfilePage({Key? key});
 
   @override
   ConsumerState<ProfilePage> createState() => _ProfilePageState();
@@ -47,7 +41,8 @@ class ProfilePage extends ConsumerStatefulWidget {
 class _ProfilePageState extends ConsumerState<ProfilePage> {
   late TextEditingController _nameController;
   late TextEditingController _bioController;
-  File? _imageFile;
+  XFile? _imageFile;
+  bool _uploadingImage = false;
 
   final authService = AuthService();
 
@@ -65,13 +60,117 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     super.dispose();
   }
 
+  Future<String?> _uploadAvatar() async {
+    if (_imageFile == null) return null;
+    try {
+      setState(() => _uploadingImage = true);
+
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) throw 'User not authenticated';
+
+      final bytes = await _imageFile!.readAsBytes();
+      final fileExtension = _imageFile!.path.split('.').last.toLowerCase();
+      final fileName = 'avatar_${user.id}_${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
+
+      // Validate file type and size
+      if (!['jpg', 'jpeg', 'png'].contains(fileExtension)) {
+        throw 'Unsupported file format. Use JPG/JPEG/PNG';
+      }
+      if (bytes.length > 6 * 1024 * 1024) {
+        throw 'File size exceeds 6MB limit';
+      }
+
+      final currentProfile = ref.read(profileProvider).value;
+      if (currentProfile?.avatar != null && currentProfile!.avatar!.isNotEmpty) {
+        try {
+          await Supabase.instance.client.storage
+              .from('avatar')
+              .remove([currentProfile.avatar!]);
+        } on StorageException catch (e) {
+          if (e.statusCode != 404) rethrow;
+        }
+      }
+
+      await Supabase.instance.client.storage
+          .from('avatar')
+          .uploadBinary(
+        fileName,
+        bytes,
+        fileOptions: FileOptions(
+          contentType: _getMimeType(fileExtension),
+          cacheControl: '3600',
+          upsert: true,
+        ),
+      );
+
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'avatar': fileName})
+          .eq('id', user.id);
+
+      return fileName;
+    } catch (e) {
+      _showErrorSnackbar('Upload failed: ${e.toString()}');
+      return null;
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
+  }
+
+  String _getMimeType(String extension) {
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  void _showErrorSnackbar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _pickImage() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() {
-        _imageFile = File(picked.path);
-      });
-      await ref.read(profileProvider.notifier).updateAvatar(picked.path);
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (picked != null) {
+        setState(() {
+          _imageFile = picked;
+        });
+
+        final avatarFileName = await _uploadAvatar();
+        if (avatarFileName != null) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            ref.invalidate(profileProvider);
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Avatar updated successfully!')),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error picking image: $e")),
+        );
+      }
     }
   }
 
@@ -80,7 +179,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       name: _nameController.text,
       bio: _bioController.text,
       points: current.points,
-      avatarUrl: current.avatarUrl,
+      avatar: current.avatar,
     );
     await ref.read(profileProvider.notifier).updateProfile(updated);
     if (mounted) {
@@ -136,6 +235,76 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     );
   }
 
+  String? _getAvatarUrl(String? avatarFileName) {
+    if (avatarFileName == null || avatarFileName.isEmpty) return null;
+    try {
+      return Supabase.instance.client.storage
+          .from('avatar')
+          .getPublicUrl(avatarFileName);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Widget _buildAvatarWidget(String? avatarFileName) {
+    if (_imageFile != null) {
+      return CircleAvatar(
+        radius: 48,
+        backgroundColor: Colors.grey.shade200,
+        backgroundImage: FileImage(File(_imageFile!.path)),
+      );
+    } else if (avatarFileName != null && avatarFileName.isNotEmpty) {
+      final imageUrl = _getAvatarUrl(avatarFileName);
+      if (imageUrl != null) {
+        return CircleAvatar(
+          radius: 48,
+          backgroundColor: Colors.grey.shade200,
+          child: ClipOval(
+            child: Image.network(
+              imageUrl,
+              width: 96,
+              height: 96,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                        : null,
+                    strokeWidth: 2,
+                    color: Colors.grey,
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person,
+                    size: 48,
+                    color: Colors.black54,
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      }
+    }
+    return CircleAvatar(
+      radius: 48,
+      backgroundColor: Colors.grey.shade200,
+      child: const Icon(Icons.person, size: 48, color: Colors.black),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(profileProvider);
@@ -158,7 +327,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             );
           },
         ),
-        title: Text('Profile'),
+        title: const Text('Profile'),
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: textColor),
         actions: [
@@ -172,8 +341,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       body: profileAsync.when(
         data: (profile) {
           if (profile == null) return const Center(child: Text('No profile found.'));
-          _nameController.text = profile.name;
-          _bioController.text = profile.bio;
+
+          if (_nameController.text.isEmpty) _nameController.text = profile.name;
+          if (_bioController.text.isEmpty) _bioController.text = profile.bio;
 
           return SingleChildScrollView(
             child: Padding(
@@ -182,32 +352,38 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   GestureDetector(
-                    onTap: _pickImage,
-                    child: CircleAvatar(
-                      radius: 48,
-                      backgroundColor: Colors.grey.shade200,
-                      backgroundImage: _imageFile != null
-                          ? FileImage(_imageFile!)
-                          : (profile.avatarUrl.isNotEmpty
-                          ? NetworkImage(profile.avatarUrl)
-                          : null) as ImageProvider?,
-                      child: profile.avatarUrl.isEmpty && _imageFile == null
-                          ? const Icon(Icons.person, size: 48, color: Colors.black)
-                          : null,
+                    onTap: _uploadingImage ? null : _pickImage,
+                    child: Stack(
+                      children: [
+                        _buildAvatarWidget(profile.avatar),
+                        if (_uploadingImage)
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.5),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 10),
                   TextButton(
-                    onPressed: _pickImage,
+                    onPressed: _uploadingImage ? null : _pickImage,
                     style: TextButton.styleFrom(
                       foregroundColor: textColor,
                       textStyle: const TextStyle(fontWeight: FontWeight.w500),
                     ),
-                    child: const Text("Change Photo"),
+                    child: Text(_uploadingImage ? "Uploading..." : "Change Photo"),
                   ),
-
                   const SizedBox(height: 24),
-
                   Row(
                     children: [
                       Expanded(
@@ -229,9 +405,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                           ),
                         ),
                       ),
-
                       const SizedBox(width: 16),
-
                       Expanded(
                         child: _buildStatContainer(
                           icon: Icons.star_outline,
@@ -239,9 +413,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                           value: profile.points.toString(),
                         ),
                       ),
-
                       const SizedBox(width: 16),
-
                       Expanded(
                         child: followingCountAsync.when(
                           data: (count) => _buildStatContainer(
@@ -327,7 +499,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     );
   }
 }
-
 
 
 

@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
+import 'package:learning_app/Discussions/Forum_page.dart';
+
 Future<void> saveEnteredChallenge(String challengeId, String challengeName) async {
   final prefs = await SharedPreferences.getInstance();
 
@@ -155,6 +157,27 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
         foregroundColor: Colors.black,
         elevation: 0,
         centerTitle: true,
+        actions: [
+          // --- FORUM BUTTON FIXED HERE ---
+          TextButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ForumPage(challengeId: widget.challengeId),
+                ),
+              );
+            },
+            icon: Icon(Icons.forum, color: Colors.blue),
+            label: Text(
+              'Forum',
+              style: TextStyle(
+                color: Colors.blue,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
       body: challengeAsync.when(
         data: (challenge) {
@@ -171,11 +194,9 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
               ),
             );
           }
-
           final tasks = challenge['tasks'] as List;
           final challengeName = challenge['name'] ?? 'UNTITLED';
           final endTime = challenge['end_time'];
-
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -285,7 +306,6 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                       final taskId = task['id'].toString();
                       final isCompleted = completedTasksList.contains(taskId);
                       final points = task['points'] ?? 0;
-
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
@@ -346,7 +366,6 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                                 ),
                                 onPressed: isCompleted ? null : () async {
                                   await completeTask(taskId, points);
-
                                   setState(() {
                                     completedTasks.add(taskId);
                                   });
@@ -396,5 +415,7 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
     );
   }
 }
+
+
 
 

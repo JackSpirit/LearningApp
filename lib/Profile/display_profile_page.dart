@@ -41,7 +41,7 @@ final otherUserProfileProvider = FutureProvider.family<Profile?, String>((ref, u
       name: data['name'] ?? '',
       bio: data['bio'] ?? '',
       points: data['points'] ?? 0,
-      avatarUrl: data['avatar_url'] ?? '',
+      avatar: data['avatar'] ?? '',
     );
   } catch (e) {
     print('Error fetching user profile: $e');
@@ -124,7 +124,7 @@ class _ViewProfilePageState extends ConsumerState<ViewProfilePage> {
   void initState() {
     super.initState();
 
-     _subscription = Supabase.instance.client
+    _subscription = Supabase.instance.client
         .channel('public:followers')
         .onPostgresChanges(
       event: PostgresChangeEvent.all,
@@ -147,6 +147,69 @@ class _ViewProfilePageState extends ConsumerState<ViewProfilePage> {
   void dispose() {
     _subscription.unsubscribe();
     super.dispose();
+  }
+
+  String? _getAvatarUrl(String? avatarPath) {
+    if (avatarPath == null || avatarPath.isEmpty) return null;
+
+    try {
+      return Supabase.instance.client.storage
+          .from('avatar')
+          .getPublicUrl(avatarPath);
+    } catch (e) {
+      print('Error getting avatar URL: $e');
+      return null;
+    }
+  }
+
+  Widget _buildAvatarWidget(String? avatarPath) {
+    final avatarUrl = _getAvatarUrl(avatarPath);
+
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFFE0E0E0), width: 2),
+      ),
+      child: CircleAvatar(
+        radius: 45,
+        backgroundColor: const Color(0xFFF5F5F5),
+        child: avatarUrl != null
+            ? ClipOval(
+          child: Image.network(
+            avatarUrl,
+            width: 90,
+            height: 90,
+            fit: BoxFit.cover,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                      : null,
+                  strokeWidth: 2,
+                  color: const Color(0xFF555555),
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) {
+              print('Error loading avatar image: $error');
+              return const Icon(
+                Icons.person,
+                size: 40,
+                color: Color(0xFF555555),
+              );
+            },
+          ),
+        )
+            : const Icon(
+          Icons.person,
+          size: 40,
+          color: Color(0xFF555555),
+        ),
+      ),
+    );
   }
 
   Future<void> _toggleFollow(BuildContext context) async {
@@ -177,7 +240,7 @@ class _ViewProfilePageState extends ConsumerState<ViewProfilePage> {
         });
       }
 
-     ref.read(followUserProvider(widget.userId).notifier).state = !isFollowing;
+      ref.read(followUserProvider(widget.userId).notifier).state = !isFollowing;
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -197,7 +260,7 @@ class _ViewProfilePageState extends ConsumerState<ViewProfilePage> {
     final followerCountAsync = ref.watch(followerCountProvider(widget.userId));
     final followingCountAsync = ref.watch(followingCountProvider(widget.userId));
 
-   const Color background = Colors.white;
+    const Color background = Colors.white;
     const Color textColor = Colors.black;
     const Color secondaryText = Color(0xFF555555);
     const Color surfaceColor = Color(0xFFF5F5F5);
@@ -234,22 +297,7 @@ class _ViewProfilePageState extends ConsumerState<ViewProfilePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: borderColor, width: 2),
-                    ),
-                    child: CircleAvatar(
-                      radius: 45,
-                      backgroundColor: surfaceColor,
-                      backgroundImage: profile.avatarUrl.isNotEmpty
-                          ? NetworkImage(profile.avatarUrl)
-                          : null,
-                      child: profile.avatarUrl.isEmpty
-                          ? const Icon(Icons.person, size: 40, color: secondaryText)
-                          : null,
-                    ),
-                  ),
+                  _buildAvatarWidget(profile.avatar),
 
                   const SizedBox(height: 20),
 
@@ -327,7 +375,6 @@ class _ViewProfilePageState extends ConsumerState<ViewProfilePage> {
 
                   Row(
                     children: [
-                      // Follower count
                       Expanded(
                         child: followerCountAsync.when(
                           data: (count) => _buildStatContainer(
@@ -381,7 +428,6 @@ class _ViewProfilePageState extends ConsumerState<ViewProfilePage> {
                       ),
                     ],
                   ),
-
 
                   if (profile.bio.isNotEmpty) ...[
                     const SizedBox(height: 32),
@@ -585,6 +631,9 @@ class _ViewProfilePageState extends ConsumerState<ViewProfilePage> {
     return '${date.day}/${date.month}/${date.year}';
   }
 }
+
+
+
 
 
 

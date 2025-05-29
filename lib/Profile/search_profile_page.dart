@@ -42,7 +42,7 @@ class _ProfileSearchPageState extends State<ProfileSearchPage> {
       _debounce = Timer(const Duration(milliseconds: 500), () async {
         final response = await supabase
             .from('profiles')
-            .select('id, name, avatar_url')
+            .select('id, name, avatar')
             .ilike('name', '%$query%')
             .limit(20);
 
@@ -57,6 +57,146 @@ class _ProfileSearchPageState extends State<ProfileSearchPage> {
         _isLoading = false;
       });
     }
+  }
+
+  String? _getAvatarUrl(String? avatarPath) {
+    if (avatarPath == null || avatarPath.isEmpty) return null;
+
+    try {
+      final url = supabase.storage
+          .from('avatar')
+          .getPublicUrl(avatarPath);
+
+      if (url.isNotEmpty && Uri.tryParse(url) != null) {
+        return url;
+      }
+      return null;
+    } catch (e) {
+      print('Error getting avatar URL: $e');
+      return null;
+    }
+  }
+
+  Widget _buildAvatarWidget(Map<String, dynamic> profile) {
+    final avatarPath = profile['avatar'] as String?;
+    final avatarUrl = _getAvatarUrl(avatarPath);
+    final name = profile['name'] as String?;
+
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.black, width: 1),
+      ),
+      child: ClipOval(
+        child: avatarUrl != null
+            ? _buildNetworkImage(avatarUrl, name)
+            : _buildFallbackAvatar(name),
+      ),
+    );
+  }
+
+  Widget _buildNetworkImage(String imageUrl, String? name) {
+    return Image.network(
+      imageUrl,
+      width: 40,
+      height: 40,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                  loadingProgress.expectedTotalBytes!
+                  : null,
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+            ),
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        print('Error loading avatar image: $error');
+
+        if (error.toString().contains('400') || error.toString().contains('statusCode: 400')) {
+          return _buildRetryableImage(imageUrl, name);
+        }
+
+        return _buildFallbackAvatar(name);
+      },
+    );
+  }
+
+  Widget _buildRetryableImage(String imageUrl, String? name) {
+    return FutureBuilder<Widget>(
+      future: _retryImageLoad(imageUrl, name),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+              ),
+            ),
+          );
+        }
+        return snapshot.data ?? _buildFallbackAvatar(name);
+      },
+    );
+  }
+
+  Future<Widget> _retryImageLoad(String imageUrl, String? name, {int maxRetries = 3}) async {
+    for (int i = 0; i < maxRetries; i++) {
+      try {
+        await Future.delayed(Duration(milliseconds: 500 * (i + 1)));
+
+        final response = await supabase.functions.invoke('test', body: {'url': imageUrl});
+
+        return Image.network(
+          imageUrl,
+          width: 40,
+          height: 40,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildFallbackAvatar(name);
+          },
+        );
+      } catch (e) {
+        print('Retry $i failed: $e');
+        if (i == maxRetries - 1) {
+          return _buildFallbackAvatar(name);
+        }
+      }
+    }
+    return _buildFallbackAvatar(name);
+  }
+
+  Widget _buildFallbackAvatar(String? name) {
+    return Container(
+      width: 40,
+      height: 40,
+      color: Colors.grey[100],
+      child: Center(
+        child: Text(
+          name != null && name.isNotEmpty
+              ? name[0].toUpperCase()
+              : '?',
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -90,7 +230,12 @@ class _ProfileSearchPageState extends State<ProfileSearchPage> {
                 controller: _searchController,
                 decoration: InputDecoration(
                   hintText: 'FIND USERS',
-                  hintStyle: TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
+                  hintStyle: TextStyle(
+                    color: Colors.black54,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
                   prefixIcon: Icon(Icons.search, color: Colors.black, size: 18),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -119,13 +264,11 @@ class _ProfileSearchPageState extends State<ProfileSearchPage> {
               ),
             ),
           ),
-
           Container(
             height: 1,
             color: Colors.black12,
             margin: EdgeInsets.symmetric(horizontal: 16),
           ),
-
           if (_isLoading)
             Padding(
               padding: const EdgeInsets.all(24.0),
@@ -154,7 +297,6 @@ class _ProfileSearchPageState extends State<ProfileSearchPage> {
                 ),
               ),
             )
-          // Search results
           else
             Expanded(
               child: ListView.builder(
@@ -166,35 +308,11 @@ class _ProfileSearchPageState extends State<ProfileSearchPage> {
                       Container(
                         color: index % 2 == 0 ? Colors.white : Colors.grey[100],
                         child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                          leading: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.black, width: 1),
-                              image: profile['avatar_url'] != null && profile['avatar_url'].toString().isNotEmpty
-                                  ? DecorationImage(
-                                image: NetworkImage(profile['avatar_url']),
-                                fit: BoxFit.cover,
-                              )
-                                  : null,
-                            ),
-                            child: profile['avatar_url'] == null || profile['avatar_url'].toString().isEmpty
-                                ? Center(
-                              child: Text(
-                                profile['name'] != null && profile['name'].toString().isNotEmpty
-                                    ? profile['name'][0].toUpperCase()
-                                    : '?',
-                                style: TextStyle(
-                                    color: Colors.black,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w900
-                                ),
-                              ),
-                            )
-                                : null,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 8.0,
                           ),
+                          leading: _buildAvatarWidget(profile),
                           title: Text(
                             profile['name'] ?? 'Unknown',
                             style: TextStyle(
@@ -204,12 +322,18 @@ class _ProfileSearchPageState extends State<ProfileSearchPage> {
                               letterSpacing: 0.5,
                             ),
                           ),
-                          trailing: Icon(Icons.arrow_forward_ios, color: Colors.black, size: 14),
+                          trailing: Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.black,
+                            size: 14,
+                          ),
                           onTap: () {
-                           Navigator.push(
+                            Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => ViewProfilePage(userId: profile['id']),
+                                builder: (context) => ViewProfilePage(
+                                  userId: profile['id'],
+                                ),
                               ),
                             );
                           },
@@ -225,6 +349,8 @@ class _ProfileSearchPageState extends State<ProfileSearchPage> {
     );
   }
 }
+
+
 
 
 
