@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:learning_app/pages/profile_page.dart';
 import 'package:learning_app/Challenge/create_challenge_page.dart';
 import 'package:learning_app/Profile/search_profile_page.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:learning_app/Challenge/challenge_enter_detail_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -14,7 +13,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  List<Map<String, String>> enteredChallenges = [];
+  List<Map<String, dynamic>> enteredChallenges = [];
   bool isLoading = true;
   final _supabase = Supabase.instance.client;
 
@@ -30,36 +29,33 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      await deleteExpiredChallenges();
-
-      final prefs = await SharedPreferences.getInstance();
-      final challengeIds = prefs.getStringList('enteredChallenges') ?? [];
-
-      final challenges = <Map<String, String>>[];
-      final validChallengeIds = <String>[];
-
-      for (final id in challengeIds) {
-        final challengeData = await fetchChallengeFromBackend(id);
-
-        if (challengeData != null) {
-          final endTime = DateTime.parse(challengeData['end_time']);
-          if (endTime.isAfter(DateTime.now())) {
-            challenges.add({
-              'id': id,
-              'name': challengeData['name'] ?? 'Challenge $id',
-            });
-            validChallengeIds.add(id);
-
-            await prefs.setString('challenge_name_$id', challengeData['name'] ?? '');
-          } else {
-             await removeLocalChallengeData(id);
-          }
-        } else {
-          await removeLocalChallengeData(id);
-        }
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) {
+        setState(() {
+          enteredChallenges = [];
+          isLoading = false;
+        });
+        return;
       }
 
-      await prefs.setStringList('enteredChallenges', validChallengeIds);
+      final data = await _supabase
+          .from('challenge_entries')
+          .select('challenge_id, challenges(id, name, end_time)')
+          .eq('user_id', userId);
+
+      final List<Map<String, dynamic>> challenges = [];
+      for (final entry in data) {
+        final challenge = entry['challenges'];
+        if (challenge != null) {
+          final endTime = DateTime.tryParse(challenge['end_time'] ?? '');
+          if (endTime == null || endTime.isAfter(DateTime.now())) {
+            challenges.add({
+              'id': challenge['id'],
+              'name': challenge['name'] ?? 'Challenge',
+            });
+          }
+        }
+      }
 
       setState(() {
         enteredChallenges = challenges;
@@ -71,79 +67,6 @@ class _HomePageState extends State<HomePage> {
         isLoading = false;
       });
     }
-  }
-
-  Future<void> deleteExpiredChallenges() async {
-    try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return;
-
-      final expiredChallenges = await _supabase
-          .from('challenges')
-          .select('id')
-          .eq('user_id', userId)
-          .lt('end_time', DateTime.now().toIso8601String());
-
-      for (final challenge in expiredChallenges) {
-        final challengeId = challenge['id'];
-
-        await _supabase
-            .from('tasks')
-            .delete()
-            .eq('challenge_id', challengeId);
-
-        await _supabase
-            .from('challenges')
-            .delete()
-            .eq('id', challengeId);
-
-        print('Deleted expired challenge: $challengeId');
-      }
-    } catch (e) {
-      print('Error deleting expired challenges: $e');
-    }
-  }
-
-  Future<Map<String, dynamic>?> fetchChallengeFromBackend(String challengeId) async {
-    try {
-      final response = await _supabase
-          .from('challenges')
-          .select('id, name, end_time')
-          .eq('id', challengeId)
-          .maybeSingle();
-
-      return response;
-    } catch (e) {
-      print('Error fetching challenge: $e');
-      return null;
-    }
-  }
-
-  Future<bool> checkChallengeExistsInBackend(String challengeId) async {
-    try {
-      final response = await _supabase
-          .from('challenges')
-          .select('id')
-          .eq('id', challengeId)
-          .maybeSingle();
-
-      return response != null;
-    } catch (e) {
-      print('Error checking challenge existence: $e');
-      return false;
-    }
-  }
-
-  Future<void> removeLocalChallengeData(String challengeId) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.remove('challenge_name_$challengeId');
-    await prefs.remove('challenge_description_$challengeId');
-    await prefs.remove('challenge_duration_$challengeId');
-    await prefs.remove('challenge_start_date_$challengeId');
-    await prefs.remove('challenge_progress_$challengeId');
-
-    print('Removed local data for deleted/expired challenge: $challengeId');
   }
 
   @override
@@ -179,6 +102,7 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Search Bar
             Container(
               height: 50,
               decoration: BoxDecoration(
@@ -213,9 +137,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
-
             if (enteredChallenges.isNotEmpty) ...[
               Row(
                 children: [
@@ -236,7 +158,7 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
               const SizedBox(height: 16),
-              Container(
+              SizedBox(
                 height: 120,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
@@ -249,7 +171,7 @@ class _HomePageState extends State<HomePage> {
                           context,
                           MaterialPageRoute(
                             builder: (context) => ChallengeDetailPage(
-                              challengeId: challenge['id']!,
+                              challengeId: challenge['id'],
                             ),
                           ),
                         ).then((_) {
@@ -258,7 +180,7 @@ class _HomePageState extends State<HomePage> {
                       },
                       child: Container(
                         width: 150,
-                        margin: EdgeInsets.only(right: 12),
+                        margin: const EdgeInsets.only(right: 12),
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.black, width: 1),
                           borderRadius: BorderRadius.circular(8),
@@ -270,8 +192,8 @@ class _HomePageState extends State<HomePage> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                challenge['name']!,
-                                style: TextStyle(
+                                challenge['name'],
+                                style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -280,7 +202,7 @@ class _HomePageState extends State<HomePage> {
                               ),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
+                                children: const [
                                   Icon(
                                     Icons.arrow_forward,
                                     size: 16,
@@ -296,10 +218,9 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ],
-
             Expanded(
               child: isLoading
-                  ? Center(
+                  ? const Center(
                 child: CircularProgressIndicator(
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                   strokeWidth: 2,
@@ -337,7 +258,6 @@ class _HomePageState extends State<HomePage> {
               )
                   : const SizedBox(),
             ),
-
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -372,5 +292,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
+
+
 
 

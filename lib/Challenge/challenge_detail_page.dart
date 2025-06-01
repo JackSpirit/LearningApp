@@ -1,30 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
-
-Future<void> saveEnteredChallenge(String challengeId, String challengeName) async {
-  final prefs = await SharedPreferences.getInstance();
-
-  final challenges = prefs.getStringList('enteredChallenges') ?? [];
-  if (!challenges.contains(challengeId)) {
-    challenges.add(challengeId);
-    await prefs.setStringList('enteredChallenges', challenges);
-  }
-
-  await prefs.setString('challenge_name_$challengeId', challengeName);
-}
-
-Future<List<String>> getEnteredChallenges() async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getStringList('enteredChallenges') ?? [];
-}
-
-Future<String> getChallengeName(String challengeId) async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getString('challenge_name_$challengeId') ?? 'Challenge $challengeId';
-}
 
 final challengeDetailProvider = FutureProvider.family<Map<String, dynamic>?, String>((ref, challengeId) async {
   final supabase = Supabase.instance.client;
@@ -59,6 +36,59 @@ class ChallengeDetailPage extends ConsumerWidget {
       return formatter.format(dateTime);
     } catch (e) {
       return 'Invalid date format';
+    }
+  }
+
+  Future<void> _enterChallenge(BuildContext context, String challengeId) async {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You need to be logged in to join a challenge.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      await supabase.from('challenge_entries').insert({
+        'user_id': user.id,
+        'challenge_id': challengeId,
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Challenge added to your home page!'),
+          backgroundColor: Colors.black87,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You have already joined this challenge.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to join challenge: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('An unexpected error occurred: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -101,6 +131,7 @@ class ChallengeDetailPage extends ConsumerWidget {
           final tasks = challenge['tasks'] as List;
           final challengeName = challenge['name'] ?? 'UNTITLED';
           final endTime = challenge['end_time'];
+          final challengeDescription = challenge['description'] ?? '';
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -126,7 +157,7 @@ class ChallengeDetailPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        challenge['description'] ?? '',
+                        challengeDescription,
                         style: const TextStyle(
                           fontSize: 14,
                           color: Colors.black87,
@@ -259,14 +290,7 @@ class ChallengeDetailPage extends ConsumerWidget {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () async {
-                      await saveEnteredChallenge(challengeId, challengeName);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Challenge added to your home page!'),
-                          backgroundColor: Colors.black87,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
+                      await _enterChallenge(context, challengeId);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.black,
@@ -315,6 +339,7 @@ class ChallengeDetailPage extends ConsumerWidget {
     );
   }
 }
+
 
 
 

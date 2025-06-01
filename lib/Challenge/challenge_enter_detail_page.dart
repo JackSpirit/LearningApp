@@ -1,81 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
 import 'package:learning_app/Discussions/Forum_page.dart';
-
-Future<void> saveEnteredChallenge(String challengeId, String challengeName) async {
-  final prefs = await SharedPreferences.getInstance();
-
-  final challenges = prefs.getStringList('enteredChallenges') ?? [];
-  if (!challenges.contains(challengeId)) {
-    challenges.add(challengeId);
-    await prefs.setStringList('enteredChallenges', challenges);
-  }
-
-  await prefs.setString('challenge_name_$challengeId', challengeName);
-}
-
-Future<void> completeTask(String taskId, int points) async {
-  final supabase = Supabase.instance.client;
-  final userId = supabase.auth.currentUser?.id;
-
-  if (userId == null) {
-    print('No authenticated user found');
-    return;
-  }
-
-  final prefs = await SharedPreferences.getInstance();
-  final completedTasks = prefs.getStringList('completedTasks') ?? [];
-  if (completedTasks.contains(taskId)) {
-    return;
-  }
-
-  try {
-    final response = await supabase
-        .from('profiles')
-        .select('points')
-        .eq('id', userId)
-        .single();
-
-    int currentPoints = response['points'] ?? 0;
-    int newPoints = currentPoints + points;
-
-    await supabase
-        .from('profiles')
-        .update({'points': newPoints})
-        .eq('id', userId);
-
-    completedTasks.add(taskId);
-    await prefs.setStringList('completedTasks', completedTasks);
-
-  } catch (e) {
-    print('Error updating points: $e');
-
-    try {
-      await supabase.from('profiles').upsert({
-        'id': userId,
-        'points': points,
-        'updated_at': DateTime.now().toIso8601String()
-      });
-
-      completedTasks.add(taskId);
-      await prefs.setStringList('completedTasks', completedTasks);
-
-    } catch (innerError) {
-      print('Error upserting profile: $innerError');
-      throw innerError;
-    }
-  }
-}
-
-Future<bool> isTaskCompleted(String taskId) async {
-  final prefs = await SharedPreferences.getInstance();
-  final completedTasks = prefs.getStringList('completedTasks') ?? [];
-  return completedTasks.contains(taskId);
-}
 
 final challengeDetailProvider = FutureProvider.family<Map<String, dynamic>?, String>((ref, challengeId) async {
   final supabase = Supabase.instance.client;
@@ -117,8 +45,20 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
   }
 
   Future<void> _loadCompletedTasks() async {
-    final prefs = await SharedPreferences.getInstance();
-    final tasks = prefs.getStringList('completedTasks') ?? [];
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    // Fetch completed task IDs for this user from backend
+    final completedRes = await supabase
+        .from('user_completed_tasks')
+        .select('task_id')
+        .eq('user_id', userId);
+
+    final tasks = (completedRes as List)
+        .map<String>((row) => row['task_id'].toString())
+        .toList();
+
     setState(() {
       completedTasks = tasks;
     });
@@ -135,6 +75,61 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
     } catch (e) {
       return 'Invalid date format';
     }
+  }
+
+  Future<void> completeTask(String taskId, int points) async {
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+
+    if (userId == null) {
+      print('No authenticated user found');
+      return;
+    }
+
+    // Prevent duplicate completion
+    if (completedTasks.contains(taskId)) return;
+
+    // Insert into user_completed_tasks
+    await supabase.from('user_completed_tasks').insert({
+      'user_id': userId,
+      'task_id': taskId,
+      'completed_at': DateTime.now().toIso8601String(),
+    });
+
+    // Update user points (optional, as in your original logic)
+    try {
+      final response = await supabase
+          .from('profiles')
+          .select('points')
+          .eq('id', userId)
+          .single();
+
+      int currentPoints = response['points'] ?? 0;
+      int newPoints = currentPoints + points;
+
+      await supabase
+          .from('profiles')
+          .update({'points': newPoints})
+          .eq('id', userId);
+    } catch (e) {
+      print('Error updating points: $e');
+      try {
+        await supabase.from('profiles').upsert({
+          'id': userId,
+          'points': points,
+          'updated_at': DateTime.now().toIso8601String()
+        });
+      } catch (innerError) {
+        print('Error upserting profile: $innerError');
+        throw innerError;
+      }
+    }
+
+    // Update local state
+    setState(() {
+      completedTasks.add(taskId);
+    });
+    ref.read(completedTasksProvider.notifier).state = [...completedTasks];
   }
 
   @override
@@ -158,7 +153,6 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
         elevation: 0,
         centerTitle: true,
         actions: [
-          // --- FORUM BUTTON FIXED HERE ---
           TextButton.icon(
             onPressed: () {
               Navigator.push(
@@ -366,11 +360,7 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                                 ),
                                 onPressed: isCompleted ? null : () async {
                                   await completeTask(taskId, points);
-                                  setState(() {
-                                    completedTasks.add(taskId);
-                                  });
                                   ref.read(completedTasksProvider.notifier).state = [...completedTasks];
-
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text('You earned $points points!'),
@@ -415,6 +405,7 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
     );
   }
 }
+
 
 
 
