@@ -4,6 +4,7 @@ import 'package:learning_app/Challenge/create_challenge_page.dart';
 import 'package:learning_app/Profile/search_profile_page.dart';
 import 'package:learning_app/Challenge/challenge_enter_detail_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:learning_app/Leaderboard/leaderboard_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -24,6 +25,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> loadEnteredChallenges() async {
+    if (!mounted) return;
     setState(() {
       isLoading = true;
     });
@@ -31,10 +33,12 @@ class _HomePageState extends State<HomePage> {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) {
-        setState(() {
-          enteredChallenges = [];
-          isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            enteredChallenges = [];
+            isLoading = false;
+          });
+        }
         return;
       }
 
@@ -45,28 +49,44 @@ class _HomePageState extends State<HomePage> {
 
       final List<Map<String, dynamic>> challenges = [];
       for (final entry in data) {
-        final challenge = entry['challenges'];
-        if (challenge != null) {
-          final endTime = DateTime.tryParse(challenge['end_time'] ?? '');
+        final challengeData = entry['challenges'];
+        if (challengeData != null) {
+          final endTime = DateTime.tryParse(challengeData['end_time'] ?? '');
           if (endTime == null || endTime.isAfter(DateTime.now())) {
             challenges.add({
-              'id': challenge['id'],
-              'name': challenge['name'] ?? 'Challenge',
+              'id': challengeData['id'],
+              'name': challengeData['name'] ?? 'Challenge',
             });
           }
         }
       }
 
-      setState(() {
-        enteredChallenges = challenges;
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          enteredChallenges = challenges;
+          isLoading = false;
+        });
+      }
     } catch (e) {
-      print('Error loading challenges: $e');
-      setState(() {
-        isLoading = false;
-      });
+      debugPrint('Error loading challenges: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading challenges: ${e.toString()}'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
+  }
+
+  void _navigateToLeaderBoardPage() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const LeaderBoard()),
+    );
   }
 
   @override
@@ -75,7 +95,7 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
+        elevation: 0.5,
         title: const Text(
           'Home',
           style: TextStyle(
@@ -86,80 +106,89 @@ class _HomePageState extends State<HomePage> {
         leading: IconButton(
           onPressed: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => ProfilePage()),
+              MaterialPageRoute(builder: (context) => const ProfilePage()),
             );
           },
           icon: const Icon(
-            Icons.person_outline,
+            Icons.person_outline_rounded,
             color: Colors.black,
             size: 28,
           ),
+          tooltip: 'Profile',
           padding: EdgeInsets.zero,
         ),
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(
+              Icons.leaderboard_rounded,
+              color: Colors.black,
+              size: 28,
+            ),
+            tooltip: 'Leaderboard',
+            onPressed: _navigateToLeaderBoardPage,
+          ),
+        ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Search Bar
-            Container(
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => ProfileSearchPage()),
-                  );
-                },
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProfileSearchPage()),
+                );
+              },
+              child: Container(
+                height: 50,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Row(
                   children: [
-                    Expanded(
-                      child: AbsorbPointer(
-                        child: TextField(
-                          enabled: false,
-                          decoration: InputDecoration(
-                            hintText: 'Search',
-                            hintStyle: TextStyle(color: Colors.grey[500]),
-                            prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 15),
-                          ),
-                        ),
-                      ),
+                    Icon(Icons.search, color: Colors.grey[600]),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Search Users or Challenges',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 16),
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 24),
-            if (enteredChallenges.isNotEmpty) ...[
+
+            if (!isLoading && enteredChallenges.isNotEmpty) ...[
               Row(
                 children: [
                   Container(
-                    height: 20,
-                    width: 4,
-                    color: Colors.black,
+                    height: 22,
+                    width: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   const Text(
-                    'MY CHALLENGES',
+                    'MY ACTIVE CHALLENGES',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
+                      letterSpacing: 1.1,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
               SizedBox(
-                height: 120,
+                height: 130,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: enteredChallenges.length,
@@ -178,15 +207,17 @@ class _HomePageState extends State<HomePage> {
                           loadEnteredChallenges();
                         });
                       },
-                      child: Container(
-                        width: 150,
-                        margin: const EdgeInsets.only(right: 12),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.black, width: 1),
-                          borderRadius: BorderRadius.circular(8),
+                      child: Card(
+                        margin: const EdgeInsets.only(right: 12, bottom: 4, top: 2),
+                        elevation: 1.5,
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(color: Colors.grey[200]!, width: 1),
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12.0),
+                        child: Container(
+                          width: 170,
+                          padding: const EdgeInsets.all(14.0),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -194,20 +225,20 @@ class _HomePageState extends State<HomePage> {
                               Text(
                                 challenge['name'],
                                 style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
                                 ),
-                                maxLines: 2,
+                                maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: const [
-                                  Icon(
-                                    Icons.arrow_forward,
-                                    size: 16,
-                                  ),
-                                ],
+                              Align(
+                                alignment: Alignment.bottomRight,
+                                child: Icon(
+                                  Icons.arrow_forward_ios_rounded,
+                                  size: 18,
+                                  color: Colors.grey[600],
+                                ),
                               ),
                             ],
                           ),
@@ -217,13 +248,15 @@ class _HomePageState extends State<HomePage> {
                   },
                 ),
               ),
+              const SizedBox(height: 24),
             ],
-            Expanded(
+
+           Expanded(
               child: isLoading
                   ? const Center(
                 child: CircularProgressIndicator(
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                  strokeWidth: 2,
+                  strokeWidth: 3,
                 ),
               )
                   : enteredChallenges.isEmpty
@@ -232,57 +265,66 @@ class _HomePageState extends State<HomePage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      Icons.sports_score_outlined,
-                      size: 48,
-                      color: Colors.grey[300],
+                      Icons.emoji_events_outlined,
+                      size: 60,
+                      color: Colors.grey[400],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     Text(
-                      'No challenges yet',
+                      'No Active Challenges',
                       style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 16,
+                        color: Colors.grey[700],
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Create or enter a challenge to get started',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 14,
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 40.0),
+                      child: Text(
+                        'Create or join a challenge to see it here!',
+                        style: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: 14,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
                     ),
+                    const SizedBox(height: 70),
                   ],
                 ),
               )
                   : const SizedBox(),
             ),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => CreateChallengePage()),
-                  ).then((_) {
-                    loadEnteredChallenges();
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+
+            Padding(
+              padding: const EdgeInsets.only(bottom: 20.0, top:16.0, left:16.0, right:16.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) =>  CreateChallengePage()),
+                    ).then((_) {
+                      loadEnteredChallenges();
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'CREATE CHALLENGE',
-                  style: TextStyle(
-                    letterSpacing: 1.2,
-                  ),
+                  child: const Text('CREATE NEW CHALLENGE'),
                 ),
               ),
             ),
@@ -292,6 +334,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
+
+
 
 
 

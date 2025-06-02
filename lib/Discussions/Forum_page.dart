@@ -4,6 +4,15 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+
+const _backgroundColor = Colors.white;
+const _onBackgroundColor = Colors.black;
+const _cardColor = Colors.white;
+const _onCardColor = Colors.black;
+const _primaryColor = Colors.black;
+const _secondaryTextColor = Colors.black54;
+const _borderColor = Colors.black12;
+
 class UserProfile {
   final String id;
   final String name;
@@ -161,6 +170,7 @@ class ForumService {
     }
   }
 
+
   Future<void> postMessage({
     required String challengeId,
     required String content,
@@ -199,6 +209,7 @@ class ForumService {
     }
   }
 
+
   Future<String?> fetchChallengeName(String challengeId) async {
     try {
       final response = await _supabase
@@ -216,7 +227,6 @@ class ForumService {
       return null;
     }
   }
-
   Future<void> updateUserFcmToken(String token) async {
     final user = _supabase.auth.currentUser;
     if (user == null) {
@@ -252,7 +262,7 @@ class _ForumPageState extends State<ForumPage> {
   final ForumService _forumService = ForumService();
   final TextEditingController _messageController = TextEditingController();
   final FocusNode _messageFocusNode = FocusNode();
-  FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
 
 
   Future<List<ForumMessage>>? _messagesFuture;
@@ -306,13 +316,17 @@ class _ForumPageState extends State<ForumPage> {
 
       if (message.notification != null) {
         print('Message also contained a notification: ${message.notification}');
-        // TODO: Display a local notification using flutter_local_notifications
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('New reply: ${message.notification?.title ?? ''} - ${message.notification?.body ?? ''}'),
+                backgroundColor: _onBackgroundColor,
+                content: Text(
+                  'New reply: ${message.notification?.title ?? ''} - ${message.notification?.body ?? ''}',
+                  style: const TextStyle(color: _backgroundColor),
+                ),
                 action: SnackBarAction(
                   label: 'View',
+                  textColor: _backgroundColor,
                   onPressed: () {
                     _fetchMessages();
                   },
@@ -324,12 +338,12 @@ class _ForumPageState extends State<ForumPage> {
       }
     });
 
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       print('Message opened app from background:');
       _handleNotificationInteraction(message);
     });
 
-   _firebaseMessaging.getInitialMessage().then((RemoteMessage? message) {
+    _firebaseMessaging.getInitialMessage().then((RemoteMessage? message) {
       if (message != null) {
         print('Message opened app from terminated state:');
         _handleNotificationInteraction(message);
@@ -342,7 +356,7 @@ class _ForumPageState extends State<ForumPage> {
     print('Notification data: ${message.data}');
     _fetchMessages();
 
- }
+  }
 
 
   Future<void> _loadInitialData() async {
@@ -368,7 +382,10 @@ class _ForumPageState extends State<ForumPage> {
       print("Error loading initial page data (profile/challenge name): $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading page details: ${e.toString()}')),
+          SnackBar(
+            content: Text('Error loading page details: ${e.toString()}', style: const TextStyle(color: _backgroundColor)),
+            backgroundColor: _onBackgroundColor,
+          ),
         );
       }
     } finally {
@@ -381,7 +398,10 @@ class _ForumPageState extends State<ForumPage> {
 
     if (_currentUserProfile == null && mounted && !_isLoadingProfile) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not load user profile. Posting disabled.')),
+        const SnackBar(
+          content: Text('Could not load user profile. Posting disabled.', style: TextStyle(color: _backgroundColor)),
+          backgroundColor: _onBackgroundColor,
+        ),
       );
     }
     _fetchMessages();
@@ -398,7 +418,10 @@ class _ForumPageState extends State<ForumPage> {
     if (_messageController.text.trim().isEmpty) return;
     if (_currentUserProfile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot post: User not identified.')),
+        const SnackBar(
+          content: Text('Cannot post: User not identified.', style: TextStyle(color: _backgroundColor)),
+          backgroundColor: _onBackgroundColor,
+        ),
       );
       return;
     }
@@ -415,12 +438,15 @@ class _ForumPageState extends State<ForumPage> {
       );
       _messageController.clear();
       _messageFocusNode.unfocus();
-      _cancelReply(); // Also clears replyingToMessageId
-      _fetchMessages(); // Refresh messages list
+      _cancelReply();
+      _fetchMessages();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error posting message: ${e.toString()}')),
+          SnackBar(
+            content: Text('Error posting message: ${e.toString()}', style: const TextStyle(color: _backgroundColor)),
+            backgroundColor: _onBackgroundColor,
+          ),
         );
       }
     } finally {
@@ -437,7 +463,10 @@ class _ForumPageState extends State<ForumPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error upvoting message: ${e.toString()}')),
+          SnackBar(
+            content: Text('Error upvoting message: ${e.toString()}', style: const TextStyle(color: _backgroundColor)),
+            backgroundColor: _onBackgroundColor,
+          ),
         );
       }
     }
@@ -479,8 +508,13 @@ class _ForumPageState extends State<ForumPage> {
     }
 
     return Scaffold(
+      backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: Text(appBarTitle),
+        title: Text(appBarTitle, style: const TextStyle(color: _onBackgroundColor, fontWeight: FontWeight.normal)),
+        backgroundColor: _backgroundColor,
+        elevation: 0.5,
+        iconTheme: const IconThemeData(color: _onBackgroundColor),
+        actionsIconTheme: const IconThemeData(color: _onBackgroundColor),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -493,14 +527,18 @@ class _ForumPageState extends State<ForumPage> {
         children: [
           Expanded(
             child: (_isLoadingProfile || _isLoadingChallengeDetails) && _messagesFuture == null
-                ? const Center(child: CircularProgressIndicator(semanticsLabel: "Loading forum data..."))
+                ? const Center(child: CircularProgressIndicator(color: _onBackgroundColor, semanticsLabel: "Loading forum data..."))
                 : _buildMessagesList(),
           ),
           if (_currentUserProfile != null) _buildMessageInputArea(),
           if (_currentUserProfile == null && !_isLoadingProfile)
             const Padding(
               padding: EdgeInsets.all(16.0),
-              child: Text("Login required to post messages.", textAlign: TextAlign.center),
+              child: Text(
+                  "Login required to post messages.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _secondaryTextColor)
+              ),
             ),
         ],
       ),
@@ -509,7 +547,7 @@ class _ForumPageState extends State<ForumPage> {
 
   Widget _buildMessagesList() {
     if ((_isLoadingProfile || _isLoadingChallengeDetails) && _messagesFuture == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator(color: _onBackgroundColor));
     }
     if (_messagesFuture == null) {
       return Center(
@@ -519,7 +557,8 @@ class _ForumPageState extends State<ForumPage> {
                 _isLoadingChallengeDetails || _isLoadingProfile
                     ? 'Loading page details...'
                     : 'Could not load messages. Please try refreshing.',
-                textAlign: TextAlign.center),
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _secondaryTextColor)),
           ));
     }
 
@@ -527,7 +566,7 @@ class _ForumPageState extends State<ForumPage> {
       future: _messagesFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && (_isLoadingProfile || _isLoadingChallengeDetails || snapshot.data == null) ) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator(color: _onBackgroundColor));
         }
         if (snapshot.hasError) {
           print("FutureBuilder error: ${snapshot.error}");
@@ -535,17 +574,23 @@ class _ForumPageState extends State<ForumPage> {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Text('Error loading messages: ${snapshot.error}\n\nPlease ensure RLS policies are correctly configured and you have network connectivity.', textAlign: TextAlign.center),
+              child: Text('Error loading messages: ${snapshot.error}\n\nPlease ensure RLS policies are correctly configured and you have network connectivity.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: _secondaryTextColor)),
             ),
           );
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text('No messages yet. Be the first to post!'));
+          return const Center(
+              child: Text('No messages yet. Be the first to post!',
+                  style: TextStyle(color: _secondaryTextColor)));
         }
 
         final messages = snapshot.data!;
         // TODO: Implement scroll to widget.messageIdToFocus if provided
         return RefreshIndicator(
+          color: _onBackgroundColor,
+          backgroundColor: _backgroundColor,
           onRefresh: () async => _loadInitialData(),
           child: ListView.builder(
             padding: const EdgeInsets.all(8.0),
@@ -568,7 +613,8 @@ class _ForumPageState extends State<ForumPage> {
 
   Widget _buildMessageInputArea() {
     return Material(
-      elevation: 8.0,
+      color: _backgroundColor,
+      elevation: 0.5,
       child: Padding(
         padding: EdgeInsets.only(
           left: 16.0,
@@ -585,12 +631,17 @@ class _ForumPageState extends State<ForumPage> {
                 padding: const EdgeInsets.only(bottom: 4.0),
                 child: Row(
                   children: [
-                    Text('Replying to ${_replyingToUsername ?? 'message'}', style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      'Replying to ${_replyingToUsername ?? 'message'}',
+                      style: const TextStyle(color: _secondaryTextColor, fontSize: 12),
+                    ),
                     const Spacer(),
                     IconButton(
-                      icon: const Icon(Icons.close, size: 16),
+                      icon: const Icon(Icons.close, size: 16, color: _secondaryTextColor),
                       onPressed: _cancelReply,
                       tooltip: "Cancel Reply",
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     )
                   ],
                 ),
@@ -601,10 +652,25 @@ class _ForumPageState extends State<ForumPage> {
                   child: TextField(
                     controller: _messageController,
                     focusNode: _messageFocusNode,
+                    style: const TextStyle(color: _onBackgroundColor),
                     decoration: InputDecoration(
                       hintText: _replyingToMessageId != null ? 'Write your reply...' : 'Type a message...',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20.0)),
+                      hintStyle: const TextStyle(color: _secondaryTextColor),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20.0),
+                        borderSide: const BorderSide(color: _borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20.0),
+                        borderSide: const BorderSide(color: _borderColor),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20.0),
+                        borderSide: const BorderSide(color: _primaryColor, width: 1.5),
+                      ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                      filled: true,
+                      fillColor: Colors.black.withOpacity(0.03),
                     ),
                     minLines: 1,
                     maxLines: 4,
@@ -615,10 +681,10 @@ class _ForumPageState extends State<ForumPage> {
                 ),
                 const SizedBox(width: 8),
                 _isPosting
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) // Smaller progress indicator
+                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: _onBackgroundColor))
                     : IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: _handlePostMessage,
+                  icon: const Icon(Icons.send, color: _primaryColor),
+                  onPressed: _isPosting ? null : _handlePostMessage,
                   tooltip: "Send Message",
                 ),
               ],
@@ -650,9 +716,13 @@ class _MessageItem extends StatelessWidget {
     final double indentPadding = depth * 20.0;
 
     return Card(
+      color: _cardColor,
+      elevation: depth == 0 ? 0.5 : 0.2,
       margin: EdgeInsets.only(left: indentPadding, top: 4.0, bottom: 4.0, right: 0),
-      elevation: 1.0 + (depth * 0.2),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: depth == 0 ? const BorderSide(color: _borderColor, width: 0.5) : BorderSide.none,
+      ),
       child: Padding(
         padding: const EdgeInsets.all(10.0),
         child: Column(
@@ -662,6 +732,8 @@ class _MessageItem extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 18,
+                  backgroundColor: Colors.grey[300],
+                  foregroundColor: _onBackgroundColor,
                   backgroundImage: (user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty)
                       ? NetworkImage(user.avatarUrl!)
                       : null,
@@ -669,7 +741,9 @@ class _MessageItem extends StatelessWidget {
                     print("Error loading avatar for ${user?.name} (URL: ${user?.avatarUrl}): $exception");
                   } : null,
                   child: (user?.avatarUrl == null || user!.avatarUrl!.isEmpty)
-                      ? Text((user?.name.isNotEmpty ?? false) ? user!.name[0].toUpperCase() : 'A', style: const TextStyle(fontSize: 16))
+                      ? Text(
+                      (user?.name.isNotEmpty ?? false) ? user!.name[0].toUpperCase() : 'A',
+                      style: const TextStyle(fontSize: 16, color: _onBackgroundColor))
                       : null,
                 ),
                 const SizedBox(width: 10),
@@ -679,11 +753,11 @@ class _MessageItem extends StatelessWidget {
                     children: [
                       Text(
                         user?.name ?? 'Anonymous User',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: _onCardColor, fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       Text(
                         _formatDateTime(message.createdAt),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                        style: const TextStyle(color: _secondaryTextColor, fontSize: 11),
                       ),
                     ],
                   ),
@@ -691,12 +765,12 @@ class _MessageItem extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(message.content, style: Theme.of(context).textTheme.bodyMedium),
+            Text(message.content, style: const TextStyle(color: _onCardColor, fontSize: 14)),
             const SizedBox(height: 8),
             Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.thumb_up_alt_outlined, size: 18, color: Theme.of(context).colorScheme.primary),
+                  icon: const Icon(Icons.thumb_up_alt_outlined, size: 18, color: _primaryColor),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   onPressed: () => onUpvote(message.id),
@@ -705,19 +779,20 @@ class _MessageItem extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   '${message.upvotes}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 14, // Consistent size
-                    color: Theme.of(context).colorScheme.primary,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: _primaryColor,
                   ),
                 ),
                 const Spacer(),
                 TextButton.icon(
                   icon: const Icon(Icons.reply, size: 16),
-                  label: const Text('REPLY'),
+                  label: const Text('REPLY', style: TextStyle(fontSize: 12)),
                   onPressed: () => onReply(message),
                   style: TextButton.styleFrom(
+                    foregroundColor: _primaryColor,
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    foregroundColor: Theme.of(context).colorScheme.secondary,
+                    minimumSize: Size.zero,
                   ),
                 ),
               ],
@@ -764,6 +839,9 @@ class _MessageItem extends StatelessWidget {
     }
   }
 }
+
+
+
 
 
 
